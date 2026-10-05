@@ -7,7 +7,7 @@
     "api/index.mjs": {
       "maxDuration": 120,
       "excludeFiles": "{node_modules/@electric-sql/**,data/**,.env,.env.*,**/*.test.mjs,artifacts/**,agent-android/**}",
-      "includeFiles": "{postgres-worker.mjs,database.mjs,node_modules/pg/**,node_modules/pg-*/**,node_modules/pgpass/**,node_modules/pg-cloudflare/**,node_modules/split2/**,node_modules/postgres-array/**,node_modules/postgres-bytea/**,node_modules/postgres-date/**,node_modules/postgres-interval/**,node_modules/xtend/**}"
+      "includeFiles": "{postgres-worker.mjs,database.mjs,node_modules/pg*/**,node_modules/postgres-*/**,node_modules/split2/**,node_modules/xtend/**}"
     }
   },
   "rewrites": [{"source": "/api/:path*", "destination": "/api/index"}],

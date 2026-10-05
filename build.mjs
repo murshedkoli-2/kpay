@@ -1,6 +1,9 @@
 import {readFileSync,existsSync} from 'node:fs';
 import {nodeFileTrace} from '@vercel/nft';
 const config=JSON.parse(readFileSync('vercel.json','utf8'));
+for(const [entry,settings] of Object.entries(config.functions||{})){
+ for(const key of ['includeFiles','excludeFiles'])if(typeof settings[key]==='string'&&settings[key].length>256)throw new Error(`functions.${entry}.${key} exceeds Vercel's 256-character limit`);
+}
 for(const file of ['public/index.html','public/app.js','public/style.css','api/index.mjs','postgres-worker.mjs'])if(!existsSync(file))throw new Error('Missing deployment file: '+file);
 if(config.outputDirectory!=='public')throw new Error('Unexpected Vercel output directory');
 const trace=await nodeFileTrace(['api/index.mjs','postgres-worker.mjs']);

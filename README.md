@@ -58,6 +58,10 @@ To import an existing SQLite workspace into a newly initialized Neon database, s
 
 Never place real payment samples or keys in source control. The simulator does not read a phone's SMS. Do not use real funds in this local release.
 
+## Password recovery
+
+Click **Forgot password?** on the shared login form to request an email reset link for an admin or merchant account. Neon Auth sends the email; email authentication must be enabled in Neon. Links return to the configured `APP_ORIGIN`, expire after 15 minutes and can be used once. New passwords require 12–128 characters. The reset token is removed from the address bar before showing the reset form. Local SQLite accounts require an administrator to recover access; email recovery uses Neon Auth.
+
 ## Team and finance
 
 Admins create individual administrator invitations. Merchant registration creates only pending merchant accounts. All accounts use the same email/password login; account type and permissions are determined by the server. **Account security** beside the sidebar user menu enables an authenticator and renews the five-minute confirmation window for sensitive actions. Existing staff accounts migrate to the Admin role.

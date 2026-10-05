@@ -8,7 +8,7 @@ import {db,keyFor,now,audit,problem,hash} from './store.mjs';
 import {login,authenticate,dispatch,ingest,enroll,heartbeat,deviceConfig,permit} from './operations.mjs';
 import {deliverWebhook} from './webhooks.mjs';
 import {authenticateAgent} from './agent-security.mjs';
-import {neonAuthEnabled,neonLogin,neonRegister,neonAuthenticate,neonLogout,assertBrowserOrigin,sessionCookie,cookieToken} from './neon-auth.mjs';
+import {neonAuthEnabled,neonForgotPassword,neonResetPassword,neonLogin,neonRegister,neonAuthenticate,neonLogout,assertBrowserOrigin,sessionCookie,cookieToken} from './neon-auth.mjs';
 function rateLimit(req,path){
  const ip=process.env.VERCEL?String(req.headers['x-forwarded-for']||'unknown').split(',')[0].trim():req.socket.remoteAddress||'local';
  const key=hash(ip+':'+path),start=Math.floor(Date.now()/60000)*60000;
@@ -28,6 +28,8 @@ export async function handler(req,res){
   if(path==='cron/webhooks'&&req.method==='GET'){if(!process.env.CRON_SECRET||req.headers.authorization!=='Bearer '+process.env.CRON_SECRET)problem('Unauthorized',401);return send(200,await runWebhookBatch());}
   if(path==='auth/config'&&req.method==='GET')return send(200,{neon:neonAuthEnabled,registration:'merchant'});
   if(req.method==='POST')assertBrowserOrigin(req);
+  if(path==='forgot-password'&&req.method==='POST'){rateLimit(req,path);return send(200,await neonForgotPassword(b));}
+  if(path==='reset-password'&&req.method==='POST'){rateLimit(req,path);const result=await neonResetPassword(b);res.setHeader('Set-Cookie',sessionCookie('',true));return send(200,result);}
   if(path==='register'&&req.method==='POST'){rateLimit(req,path);if(neonAuthEnabled)return send(201,await neonRegister(b));if(b.role!=='merchant')problem('Use an administrator invitation',403);return send(201,saveRegistration(registrationFields(b)));}
   if(path==='login'&&req.method==='POST'){
    rateLimit(req,path);const result=neonAuthEnabled?await neonLogin(b):login(b);

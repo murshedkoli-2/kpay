@@ -40,5 +40,13 @@ test('Neon Auth verifies identities, invitations, revocation, cookies and MFA',a
   await assert.rejects(auth.neonLogin({...credentials,otp}),e=>e.status===401);
   revoked=true;await assert.rejects(auth.neonAuthenticate(mfaSession.token),e=>e.status===401);revoked=false;
   await auth.neonLogout(mfaSession.token);assert.equal(await auth.neonAuthenticate(mfaSession.token),null);
+  revoked=false;user={id:'neon-merchant',email:'merchant@example.com',name:'Registered merchant',emailVerified:true};
+  const merchantCredentials={...credentials,email:user.email,name:user.name,role:'merchant'};
+  await auth.neonRegister(merchantCredentials);
+  await assert.rejects(auth.neonLogin(merchantCredentials),e=>e.status===403);
+  db.prepare("UPDATE merchants SET status='active',providers='[\"bkash\"]' WHERE email=?").run(user.email);
+  const merchantSession=await auth.neonLogin(merchantCredentials);
+  assert.equal((await auth.neonAuthenticate(merchantSession.token)).kind,'merchant');
+  user={...user,id:'wrong-neon-identity'};assert.equal(await auth.neonAuthenticate(merchantSession.token),null);
  }finally{db.close();await new Promise(resolve=>upstream.close(resolve));}
 });

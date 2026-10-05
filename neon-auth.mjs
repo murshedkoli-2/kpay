@@ -1,15 +1,17 @@
 import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 import {db,problem,required,audit,transaction,now} from './store.mjs';
-import {createSession,authenticate} from './operations.mjs';
+import {createSession,createMerchantSession,authenticate} from './operations.mjs';
+import {registrationFields,saveRegistration} from './merchant-registration.mjs';
 
 export const neonAuthEnabled=!!process.env.NEON_AUTH_BASE_URL;
+if(process.env.VERCEL&&!neonAuthEnabled)throw new Error('NEON_AUTH_BASE_URL is required on Vercel');
 const base=process.env.NEON_AUTH_BASE_URL?.replace(/\/$/,'');
 const ownerEmail=process.env.NEON_OWNER_EMAIL?.trim().toLowerCase();
 const origin=process.env.APP_ORIGIN||'http://127.0.0.1:3000';
 if(neonAuthEnabled){
  if(new URL(base).protocol!=='https:'&&!process.env.KPAY_AUTH_TEST)throw new Error('NEON_AUTH_BASE_URL requires HTTPS');
  if(!/^[a-f\d]{64}$/i.test(process.env.AUTH_ENCRYPTION_KEY||''))throw new Error('AUTH_ENCRYPTION_KEY must be a random 32-byte hex key');
- if(process.env.NODE_ENV==='production'&&new URL(origin).protocol!=='https:')throw new Error('APP_ORIGIN requires HTTPS in production');
+ if((process.env.NODE_ENV==='production'||process.env.VERCEL)&&new URL(origin).protocol!=='https:')throw new Error('APP_ORIGIN requires HTTPS in production');
 }
 function seal(value){const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',Buffer.from(process.env.AUTH_ENCRYPTION_KEY,'hex'),iv);const data=Buffer.concat([cipher.update(value,'utf8'),cipher.final()]);return Buffer.concat([iv,cipher.getAuthTag(),data]).toString('base64');}
 function unseal(value){const data=Buffer.from(value,'base64'),cipher=createDecipheriv('aes-256-gcm',Buffer.from(process.env.AUTH_ENCRYPTION_KEY,'hex'),data.subarray(0,12));cipher.setAuthTag(data.subarray(12,28));return Buffer.concat([cipher.update(data.subarray(28)),cipher.final()]).toString('utf8');}
@@ -31,6 +33,12 @@ export async function neonLogin(b){
  if(!result.cookie)problem('Neon Auth did not return a session',502);
  const user=await identity(result.cookie),email=user.email?.toLowerCase();
  return transaction(()=>{
+  if(b.role==='merchant'){
+   let merchant=db.prepare('SELECT * FROM merchants WHERE neon_user_id=?').get(user.id);
+   if(!merchant){merchant=db.prepare('SELECT * FROM merchants WHERE email=?').get(email);if(!merchant||merchant.neon_user_id||merchant.registration_source!=='self')problem('No registered merchant account matches this identity',403);if(merchant.status!=='active')problem('Your merchant account is awaiting approval or suspended',403);db.prepare('UPDATE merchants SET neon_user_id=? WHERE id=?').run(user.id,merchant.id);}
+   if(merchant.status!=='active')problem('Your merchant account is awaiting approval or suspended',403);
+   const session=createMerchantSession(merchant);db.prepare('UPDATE sessions SET neon_cookie=? WHERE hash=?').run(seal(result.cookie),session.token_hash);delete session.token_hash;return session;
+  }
   let admin=db.prepare('SELECT * FROM administrators WHERE neon_user_id=?').get(user.id);
   if(!admin){
    admin=db.prepare('SELECT * FROM administrators WHERE email=?').get(email);
@@ -46,6 +54,7 @@ export async function neonLogin(b){
  });
 }
 export async function neonRegister(b){
+ if(b.role==='merchant'){const fields=registrationFields(b);await upstream('sign-up/email',{body:{...fields,callbackURL:origin}});return saveRegistration(fields,{neon:true});}
  const email=required(b.email,'Email').toLowerCase(),password=required(b.password,'Password',200);
  if(password.length<12)problem('Use at least 12 password characters');
  const admin=db.prepare("SELECT id FROM administrators WHERE email=? AND status='active'").get(email);
@@ -54,14 +63,14 @@ export async function neonRegister(b){
  return {message:'Account created. Verify your email, then sign in to the workspace.'};
 }
 export async function neonAuthenticate(token){
- const actor=authenticate(token);if(!actor||actor.kind==='merchant')return actor;
+ const actor=authenticate(token);if(!actor||!actor.token_hash)return actor;
  const session=db.prepare('SELECT neon_cookie FROM sessions WHERE hash=?').get(actor.token_hash);
  if(!session?.neon_cookie)return null;
  const user=await identity(unseal(session.neon_cookie));
  return user.id===actor.neon_user_id?actor:null;
 }
 export async function neonLogout(token){
- const actor=authenticate(token);if(!actor||actor.kind!=='admin')return;
+ const actor=authenticate(token);if(!actor||!actor.token_hash)return;
  const row=db.prepare('SELECT neon_cookie FROM sessions WHERE hash=?').get(actor.token_hash);
  // Local revocation must succeed even if Neon is unavailable.
  db.prepare('DELETE FROM sessions WHERE hash=?').run(actor.token_hash);audit(actor,'Signed out','session');

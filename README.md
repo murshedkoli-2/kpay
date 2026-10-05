@@ -12,11 +12,13 @@ Open [the dashboard](http://127.0.0.1:3000). With no Neon configuration, the own
 
 ## Neon database and authentication
 
+Merchant businesses can use **Register merchant**. Staff review registrations in **Merchants → Manage**, approve providers and activate the account before merchant login. See [registration, administrator credentials and Vercel setup](docs/18-registration-and-vercel.md).
+
 Copy `.env.example` to `.env`, then configure `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_OWNER_EMAIL`, `AUTH_ENCRYPTION_KEY` and `APP_ORIGIN`. The start commands load `.env` automatically. Keep this file private; it is ignored by Git. Keep the same encryption key across restarts and replicas, since it encrypts stored upstream session cookies.
 
 Enable Neon Auth email/password authentication and email verification. Add the exact `APP_ORIGIN` (locally, `http://127.0.0.1:3000`) to trusted domains in Neon Auth settings. Use the database and Auth URL for the same Neon branch. PostgreSQL connections verify TLS certificates, and application tables initialize at startup without touching `neon_auth` tables.
 
-On the sign-in page, enter the configured owner email and a password of at least 12 characters, then choose **Create invited account**. Complete email verification and sign in. Existing verified Neon users can sign in directly. The first verified owner login links that Neon identity to the workspace owner. Owners add team administrators with their email and role; those users then create their invited Neon accounts. Registration is restricted to approved team emails and the configured owner email. Workspace roles are controlled by the application, not user-supplied Neon profile metadata.
+On the sign-in page, choose **Activate staff account**, then enter the configured owner email and a password of at least 12 characters. Alternatively run `npm run admin:setup` to generate owner credentials. Complete email verification and sign in. Existing verified Neon users can sign in directly. The first verified owner login links that Neon identity to the workspace owner. Owners add team administrators with their email and role; those users then create their invited Neon accounts. Registration is restricted to approved team emails and the configured owner email. Workspace roles are controlled by the application, not user-supplied Neon profile metadata.
 
 Admin sessions use HttpOnly, SameSite=Strict cookies; HTTPS origins also set Secure. Each authenticated request checks the upstream Neon session, the linked identity and the active administrator status. Logout removes the local session and requests upstream revocation. Existing MFA and finance approval rules remain enforced. Local owner-key/password login is disabled when Neon Auth is configured; merchant API keys and signed Android device requests retain their existing behavior.
 
@@ -45,7 +47,7 @@ To import an existing SQLite workspace into a newly initialized Neon database, s
 
 ## First setup
 
-1. Sign in using **Workspace owner key**.
+1. Sign in using **Administrator** with Neon Auth, or **Workspace owner key** in local development.
 2. Add a central receiving account. It starts paused.
 3. Create an SMS template using an actual anonymized sample and `{{sender}}`, `{{transaction}}`, `{{amount}}` markers. Test extraction.
 4. Add a second distinct positive fixture and a negative fixture. Publish the template with a reason.
@@ -58,7 +60,7 @@ Never place real payment samples or keys in source control. The simulator does n
 
 ## Team and finance
 
-Owners create individual team accounts with Operations, Finance, Support or Owner roles. Team accounts sign in with email/password. **Account security** beside the sidebar user menu enables an authenticator and renews the five-minute confirmation window. MFA-enabled accounts require an unused current code at login; wait for the next code if the previous one was consumed.
+Owners create individual team accounts with Operations, Finance, Support or Owner roles. Team accounts sign in with email/password; with Neon Auth, invite their email and have them activate and verify the account. **Account security** beside the sidebar user menu enables an authenticator and renews the five-minute confirmation window. MFA-enabled accounts require an unused current code at login; wait for the next code if the previous one was consumed.
 
 Merchant payout destinations and payouts require separate maker/checker identities. Reserve a payout from an available balance, have another finance/owner account approve, then record external execution evidence. This application does not send money. Unknown external outcomes remain reserved. A finance adjustment also needs another approver.
 

@@ -1,0 +1,10 @@
+import {readFileSync,existsSync} from 'node:fs';
+import {nodeFileTrace} from '@vercel/nft';
+const config=JSON.parse(readFileSync('vercel.json','utf8'));
+for(const file of ['public/index.html','public/app.js','public/style.css','api/index.mjs','postgres-worker.mjs'])if(!existsSync(file))throw new Error('Missing deployment file: '+file);
+if(config.outputDirectory!=='public')throw new Error('Unexpected Vercel output directory');
+const trace=await nodeFileTrace(['api/index.mjs','postgres-worker.mjs']);
+const fileList=new Set([...trace.fileList].map(file=>file.replaceAll('\\','/')));
+for(const file of ['server.mjs','store.mjs','operations.mjs','neon-auth.mjs','merchant-registration.mjs','node_modules/pg/lib/index.js'])if(!fileList.has(file))throw new Error('Missing function dependency: '+file);
+if([...fileList].some(file=>file==='.env'||file.startsWith('data/')))throw new Error('Private local files must not be bundled');
+console.log(`Static assets and Vercel function entry point are ready (${fileList.size} traced dependencies)`);

@@ -40,6 +40,7 @@ export function postgresSQL(sql){
 
 export const databaseKind=process.env.DATABASE_URL?'postgres':'sqlite';
 export function openDatabase(){
+ if(process.env.VERCEL&&!process.env.DATABASE_URL)throw new Error('DATABASE_URL is required on Vercel; SQLite is local development only');
  if(process.env.DATABASE_URL)return new PostgresDatabase(process.env.DATABASE_URL);
  if(process.env.KPAY_PGLITE_TEST)return new PostgresDatabase(process.env.KPAY_PGLITE_TEST,{pglite:true});
  mkdirSync('data',{recursive:true});return new DatabaseSync(process.env.KPAY_DB||'data/kpay.sqlite');

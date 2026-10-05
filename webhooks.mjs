@@ -7,7 +7,9 @@ export function publicAddress(ip){if(isIP(ip)===4){const [a,b]=ip.split('.').map
 const running=new Set();
 export async function deliverWebhook(eid){
  if(running.has(eid))problem('Delivery already in progress',409);running.add(eid);
+ const lease=id();
  try{
+  if(db.prepare('UPDATE webhook_events SET lease_token=?,lease_until=? WHERE id=? AND (lease_until IS NULL OR lease_until<?)').run(lease,new Date(Date.now()+60000).toISOString(),eid,now()).changes!==1)problem('Delivery is leased by another worker or missing',409);
   const w=db.prepare('SELECT * FROM webhook_events WHERE id=?').get(eid);if(!w)problem('Event not found',404);
   const endpoint=db.prepare('SELECT * FROM webhook_endpoints WHERE merchant_id=? AND enabled=1').get(w.merchant_id);if(!endpoint)problem('Configure a merchant webhook endpoint first');
   let status=0,error='';
@@ -20,5 +22,11 @@ export async function deliverWebhook(eid){
   }catch(e){error=e.message;}
   const attempts=w.attempts+1,success=status>=200&&status<300,dead=!success&&(attempts>=12||Date.now()-Date.parse(w.created)>72*3600000);
   db.prepare('INSERT INTO webhook_attempts VALUES (?,?,?,?,?)').run(id(),eid,status,error,now());db.prepare('UPDATE webhook_events SET status=?,attempts=?,last_status=?,last_error=?,next_attempt=? WHERE id=?').run(success?'delivered':dead?'failed':'queued',attempts,status,error,new Date(Date.now()+Math.min(6*3600000,30000*2**Math.min(attempts,10))).toISOString(),eid);return {delivered:success,status,error};
- }finally{running.delete(eid);}
+ }finally{db.prepare('UPDATE webhook_events SET lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=?').run(eid,lease);running.delete(eid);}
+}
+export async function runWebhookBatch(limit=10){
+ db.prepare('DELETE FROM rate_limits WHERE window_start<?').run(Date.now()-86400000);
+ const rows=db.prepare("SELECT w.id FROM webhook_events w JOIN webhook_endpoints e ON e.merchant_id=w.merchant_id WHERE w.status='queued' AND w.next_attempt<=? AND e.enabled=1 AND (w.lease_until IS NULL OR w.lease_until<?) ORDER BY w.created LIMIT ?").all(now(),now(),Math.min(limit,10));
+ let processed=0;for(const row of rows){try{await deliverWebhook(row.id);processed++;}catch(e){if(e.status!==409)throw e;}}
+ return {processed};
 }

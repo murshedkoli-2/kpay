@@ -30,10 +30,9 @@ export async function handler(req,res){
   if(req.method==='POST')assertBrowserOrigin(req);
   if(path==='register'&&req.method==='POST'){rateLimit(req,path);if(neonAuthEnabled)return send(201,await neonRegister(b));if(b.role!=='merchant')problem('Use an administrator invitation',403);return send(201,saveRegistration(registrationFields(b)));}
   if(path==='login'&&req.method==='POST'){
-   rateLimit(req,path);const result=neonAuthEnabled&&!(b.role==='merchant'&&b.key)?await neonLogin(b):login(b);
+   rateLimit(req,path);const result=neonAuthEnabled?await neonLogin(b):login(b);
    delete result.token_hash;
-   if(result.role==='admin'||!b.key){res.setHeader('Set-Cookie',sessionCookie(result.token));if(neonAuthEnabled)delete result.token;}
-   else res.setHeader('Set-Cookie',sessionCookie('',true));
+   res.setHeader('Set-Cookie',sessionCookie(result.token));if(neonAuthEnabled)delete result.token;
    return send(200,result);
   }
   const bearer=(req.headers.authorization||'').replace(/^Bearer /,'');
@@ -53,7 +52,7 @@ export async function handler(req,res){
 export default handler;
 if(!process.env.VERCEL&&process.argv[1]===fileURLToPath(import.meta.url)){
  const server=http.createServer(handler);server.requestTimeout=15000;
- server.listen(Number(process.env.PORT||3000),process.env.HOST||'127.0.0.1',()=>{console.log('kPay admin panel: '+(process.env.APP_ORIGIN||'http://127.0.0.1:'+(process.env.PORT||3000)));console.log('Database: '+(process.env.DATABASE_URL?'Neon PostgreSQL':'local'));if(neonAuthEnabled)console.log('Authentication: Neon Auth');else{console.log('Admin login key: '+keyFor('admin'));console.log('Merchant login key: '+keyFor('merchant'));}});
+ server.listen(Number(process.env.PORT||3000),process.env.HOST||'127.0.0.1',()=>{console.log('kPay admin panel: '+(process.env.APP_ORIGIN||'http://127.0.0.1:'+(process.env.PORT||3000)));console.log('Database: '+(process.env.DATABASE_URL?'Neon PostgreSQL':'local'));if(neonAuthEnabled)console.log('Authentication: Neon Auth');else{console.log('Merchant API key: '+keyFor('merchant'));}});
  let deliveryRunning=false;
  const timer=setInterval(async()=>{if(deliveryRunning)return;deliveryRunning=true;try{await runWebhookBatch(1);}catch(e){console.error('Webhook worker:',e.message);}finally{deliveryRunning=false;}},10000);timer.unref();
  process.on('SIGINT',()=>{clearInterval(timer);server.close(()=>{db.close();process.exit();});});

@@ -65,7 +65,9 @@ if(!keyFor('settings'))db.prepare('INSERT INTO config VALUES (?,?)').run('settin
 }
 export const settings=()=>({...defaults,...JSON.parse(keyFor('settings'))});
 if(!process.env.VERCEL||process.env.KPAY_MIGRATE) {
-db.prepare("INSERT OR IGNORE INTO administrators(id,name,email,role,created) VALUES ('owner','Workspace owner','owner@kpay.local','owner',?)").run(now());
+db.prepare("INSERT OR IGNORE INTO administrators(id,name,email,role,created) VALUES ('owner','Workspace owner','owner@kpay.local','admin',?)").run(now());
+db.exec("UPDATE administrators SET role='admin' WHERE role<>'admin';");
+
 db.prepare("INSERT OR IGNORE INTO merchants(id,name,email,created) VALUES ('demo_merchant','Demo merchant','demo@kpay.local',?)").run(now());
 db.prepare('INSERT OR IGNORE INTO merchant_keys(id,merchant_id,hash,prefix,created) VALUES (?,?,?,?,?)').run('legacy-demo','demo_merchant',hash(keyFor('merchant')),keyFor('merchant').slice(0,8),now());
 db.exec("UPDATE payments SET beneficiary_id=merchant WHERE beneficiary_id IS NULL; UPDATE templates SET family=id WHERE family IS NULL;");

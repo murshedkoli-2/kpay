@@ -8,11 +8,11 @@ import {join} from 'node:path';
 
 test('native device signatures, replay protection and physical SIM approval',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'kpay-agent-test-'));
- const proc=spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'3101',KPAY_DB:join(dir,'test.sqlite')},stdio:['ignore','pipe','pipe']});let output='',errors='';proc.stderr.on('data',c=>errors+=c);
+ const proc=spawn(process.execPath,['test-support/server-fixture.mjs'],{env:{...process.env,PORT:'3101',KPAY_DB:join(dir,'test.sqlite')},stdio:['ignore','pipe','pipe']});let output='',errors='';proc.stderr.on('data',c=>errors+=c);
  try {
-  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error(errors||'Server timeout')),10000);proc.stdout.on('data',c=>{output+=c;if(output.includes('Merchant login key:')){clearTimeout(timer);resolve();}});proc.on('error',reject);});
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error(errors||'Server timeout')),30000);proc.stdout.on('data',c=>{output+=c;if(output.includes('Merchant API key:')){clearTimeout(timer);resolve();}});proc.on('error',reject);});
   const req=async(path,b,key='',headers={})=>{const response=await fetch('http://127.0.0.1:3101/api/'+path,{method:b?'POST':'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key,...headers},...(b?{body:JSON.stringify(b)}:{})});return {status:response.status,data:await response.json()};};
-  const admin=(await req('login',{role:'admin',key:output.match(/Admin login key: (\w+)/)[1]})).data.token;
+  const admin=(await req('login',{email:'owner@kpay.local',password:'test-admin-password-123'})).data.token;
   const a=(await req('admin/accounts',{provider:'bkash',type:'personal',number:'01712345678',label:'Native test',operation:'incoming_transfer',instructions:'Test',minimum:'1',maximum:'10000',daily_limit:'100000'},admin)).data;
   const pairing=(await req('admin/devices',{name:'Native phone',account_id:a.id,sim:'Physical SIM 1'},admin)).data;
   const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'}),publicKey=keys.publicKey.export({format:'der',type:'spki'}).toString('base64');

@@ -8,7 +8,7 @@ npm run dev
 npm test
 ```
 
-Open [the dashboard](http://127.0.0.1:3000). With no Neon configuration, the owner login key and demo merchant API key are printed in the terminal and data persists in `data/kpay.sqlite`. With `DATABASE_URL` configured, the application uses PostgreSQL instead. The server binds to localhost by default.
+Open [the dashboard](http://127.0.0.1:3000). With no Neon configuration, accounts sign in with email/password and the demo merchant API key is available only for API integration and data persists in `data/kpay.sqlite`. With `DATABASE_URL` configured, the application uses PostgreSQL instead. The server binds to localhost by default.
 
 ## Neon database and authentication
 
@@ -18,9 +18,9 @@ Copy `.env.example` to `.env`, then configure `DATABASE_URL`, `NEON_AUTH_BASE_UR
 
 Enable Neon Auth email/password authentication and email verification. Add the exact `APP_ORIGIN` (locally, `http://127.0.0.1:3000`) to trusted domains in Neon Auth settings. Use the database and Auth URL for the same Neon branch. PostgreSQL connections verify TLS certificates, and application tables initialize at startup without touching `neon_auth` tables.
 
-On the sign-in page, choose **Activate staff account**, then enter the configured owner email and a password of at least 12 characters. Alternatively run `npm run admin:setup` to generate owner credentials. Complete email verification and sign in. Existing verified Neon users can sign in directly. The first verified owner login links that Neon identity to the workspace owner. Owners add team administrators with their email and role; those users then create their invited Neon accounts. Registration is restricted to approved team emails and the configured owner email. Workspace roles are controlled by the application, not user-supplied Neon profile metadata.
+On the sign-in page, choose **Activate invited admin**, then enter the configured owner email and a password of at least 12 characters. Alternatively run `npm run admin:setup` to generate owner credentials. Complete email verification and sign in. Existing verified Neon users can sign in directly. The first verified owner login links that Neon identity to the workspace owner. Admins invite other administrators by email; those users then create their invited Neon accounts. Registration is restricted to approved team emails and the configured owner email. Workspace roles are controlled by the application, not user-supplied Neon profile metadata.
 
-Admin sessions use HttpOnly, SameSite=Strict cookies; HTTPS origins also set Secure. Each authenticated request checks the upstream Neon session, the linked identity and the active administrator status. Logout removes the local session and requests upstream revocation. Existing MFA and finance approval rules remain enforced. Local owner-key/password login is disabled when Neon Auth is configured; merchant API keys and signed Android device requests retain their existing behavior.
+Admin sessions use HttpOnly, SameSite=Strict cookies; HTTPS origins also set Secure. Each authenticated request checks the upstream Neon session, the linked identity and the active administrator status. Logout removes the local session and requests upstream revocation. There are exactly two account roles: Admin and Merchant. The server assigns the role from the saved account after email/password authentication. API keys cannot sign in. Enabled MFA protects sensitive admin actions through Account security after login; independent finance approvals remain enforced.
 
 For deployment, set `APP_ORIGIN` to your HTTPS origin, `NODE_ENV=production` and `HOST` to your deployment's bind address. Add that origin to Neon Auth trusted domains. The current synchronous business logic runs PostgreSQL queries through a worker with one connection and serialized transactions; it is suitable for this admin workspace, and high throughput will require an asynchronous storage refactor. A transaction advisory lock coordinates cooperating application instances. Run one instance during schema initialization or upgrades.
 
@@ -47,7 +47,7 @@ To import an existing SQLite workspace into a newly initialized Neon database, s
 
 ## First setup
 
-1. Sign in using **Administrator** with Neon Auth, or **Workspace owner key** in local development.
+1. Sign in with your email and password. The same form serves admins and merchants.
 2. Add a central receiving account. It starts paused.
 3. Create an SMS template using an actual anonymized sample and `{{sender}}`, `{{transaction}}`, `{{amount}}` markers. Test extraction.
 4. Add a second distinct positive fixture and a negative fixture. Publish the template with a reason.
@@ -60,15 +60,15 @@ Never place real payment samples or keys in source control. The simulator does n
 
 ## Team and finance
 
-Owners create individual team accounts with Operations, Finance, Support or Owner roles. Team accounts sign in with email/password; with Neon Auth, invite their email and have them activate and verify the account. **Account security** beside the sidebar user menu enables an authenticator and renews the five-minute confirmation window. MFA-enabled accounts require an unused current code at login; wait for the next code if the previous one was consumed.
+Admins create individual administrator invitations. Merchant registration creates only pending merchant accounts. All accounts use the same email/password login; account type and permissions are determined by the server. **Account security** beside the sidebar user menu enables an authenticator and renews the five-minute confirmation window for sensitive actions. Existing staff accounts migrate to the Admin role.
 
-Merchant payout destinations and payouts require separate maker/checker identities. Reserve a payout from an available balance, have another finance/owner account approve, then record external execution evidence. This application does not send money. Unknown external outcomes remain reserved. A finance adjustment also needs another approver.
+Merchant payout destinations and payouts require separate maker/checker identities. Reserve a payout from an available balance, have another admin account approve, then record external execution evidence. This application does not send money. Unknown external outcomes remain reserved. A finance adjustment also needs another approver.
 
 ## API and device integration
 
 Current runnable endpoints use `/api`, documented in [the implementation guide](docs/16-admin-implementation.md). Target `/v1` contracts in the planning documents are a future public API migration.
 
-Merchant credentials only authorize their own data and provider selection; merchants cannot select arbitrary receiving numbers. The old prototype `/api/accounts` and `/api/templates` writes are replaced by `/api/admin/...` routes. Owner bootstrap keys are accepted only at sign-in, not as admin API bearer tokens.
+Merchant credentials only authorize their own data and provider selection; merchants cannot select arbitrary receiving numbers. The old prototype `/api/accounts` and `/api/templates` writes are replaced by `/api/admin/...` routes. Bootstrap keys cannot sign in or authorize admin API requests.
 
 ## Validation
 

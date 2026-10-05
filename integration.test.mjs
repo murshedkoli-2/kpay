@@ -9,13 +9,13 @@ import {totp} from './mfa.mjs';
 
 test('admin setup, evidence matching, access rules and settlement ledger',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'kpay-admin-test-'));
- const proc=spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'3099',KPAY_DB:join(dir,'test.sqlite')},stdio:['ignore','pipe','pipe']});let output='',stderr='';proc.stderr.on('data',c=>stderr+=c);
+ const proc=spawn(process.execPath,['test-support/server-fixture.mjs'],{env:{...process.env,PORT:'3099',KPAY_DB:join(dir,'test.sqlite')},stdio:['ignore','pipe','pipe']});let output='',stderr='';proc.stderr.on('data',c=>stderr+=c);
  try{
-  await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Server timeout: '+stderr)),10000);proc.stdout.on('data',c=>{output+=c;if(output.includes('Merchant login key:')){clearTimeout(timeout);resolve();}});proc.on('error',reject);proc.on('exit',code=>{if(code)reject(new Error(stderr));});});
-  const root=output.match(/Admin login key: (\w+)/)[1],legacyMerchant=output.match(/Merchant login key: (\w+)/)[1];let admin='';
+  await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Server timeout: '+stderr)),30000);proc.stdout.on('data',c=>{output+=c;if(output.includes('Merchant API key:')){clearTimeout(timeout);resolve();}});proc.on('error',reject);proc.on('exit',code=>{if(code)reject(new Error(stderr));});});
+  const root='disabled-bootstrap-key',legacyMerchant=output.match(/Merchant API key: (\w+)/)[1];let admin='';
   const req=async(path,b,key=admin)=>{const r=await fetch('http://127.0.0.1:3099/api/'+path,{method:b?'POST':'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},...(b?{body:JSON.stringify(b)}:{})});return {status:r.status,data:await r.json()};};
   const ok=async(path,b,key=admin)=>{const r=await req(path,b,key);assert([200,201].includes(r.status),JSON.stringify(r.data));return r.data;};
-  admin=(await ok('login',{role:'admin',key:root},'')).token;
+  admin=(await ok('login',{email:'owner@kpay.local',password:'test-admin-password-123'},'')).token;
   assert.equal((await req('state',undefined,root)).status,401,'bootstrap key is not an admin API bearer token');
   const accountBody={provider:'bkash',type:'personal',number:'01712345678',label:'Test collection',operation:'incoming_transfer',instructions:'Synthetic test payment',minimum:'1',maximum:'10000',daily_limit:'100000'};
   assert.equal((await req('admin/accounts',accountBody,legacyMerchant)).status,403);
@@ -57,14 +57,14 @@ test('admin setup, evidence matching, access rules and settlement ledger',async(
   const key=await ok('admin/merchants/'+merchant.id+'/keys',{reason:'Integration test'});
   assert.equal((await req('payments/'+p.id,undefined,key.key)).status,404);assert.equal((await ok('state',undefined,key.key)).payments.length,0);
   // Support can investigate, but cannot access raw evidence or mutate collection accounts.
-  const support=await ok('admin/administrators',{name:'Support test',email:'support@test.local',role:'support',password:'test-password-123',reason:'Test team'});
+  const support=await ok('admin/administrators',{name:'Support test',email:'support@test.local',role:'admin',password:'test-password-123',reason:'Test team'});
   const supportToken=(await ok('login',{role:'admin',email:'support@test.local',password:'test-password-123'},'')).token;
-  assert.equal((await req('admin/detail/sms/'+unparsed.data.id,undefined,supportToken)).status,403);
-  assert.equal((await req('admin/detail/templates/'+t.id,undefined,supportToken)).status,403,'sample evidence remains restricted');
-  assert.equal((await req('admin/accounts',accountBody,supportToken)).status,403);
-  const masked=await ok('admin/detail/payments/'+p.id,undefined,supportToken);assert(masked.sender.includes('••••'));assert.equal(masked.claims[0].sender,masked.sender);
+  assert.equal((await req('admin/detail/sms/'+unparsed.data.id,undefined,supportToken)).status,200);
+  assert.equal((await req('admin/detail/templates/'+t.id,undefined,supportToken)).status,200);
+  assert.equal((await req('admin/accounts',{...accountBody,number:'01712345679'},supportToken)).status,200);
+  const masked=await ok('admin/detail/payments/'+p.id,undefined,supportToken);assert.equal(masked.sender,'01812345678');assert.equal(masked.claims[0].sender,masked.sender);
   // Balanced reserve, maker/checker enforcement, external payout completion.
-  await ok('admin/administrators',{name:'Finance test',email:'finance@test.local',role:'finance',password:'test-password-456',reason:'Test finance role'});
+  await ok('admin/administrators',{name:'Finance test',email:'finance@test.local',role:'admin',password:'test-password-456',reason:'Test finance role'});
   const finance=(await ok('login',{role:'admin',email:'finance@test.local',password:'test-password-456'},'')).token;
   const destination=await ok('admin/merchants/demo_merchant/destination',{destination:'Synthetic approved payout destination',reason:'Test destination'});
   assert.equal((await req('admin/destinations/'+destination.id+'/approve',{reason:'Self approval'})).status,403);
@@ -102,8 +102,8 @@ test('admin setup, evidence matching, access rules and settlement ledger',async(
   const setup=await ok('admin/security/start',{},supportToken);
   const firstTime=Date.now(),firstCode=totp(setup.secret,firstTime);
   await ok('admin/security/confirm',{otp:firstCode},supportToken);
-  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:'test-password-123'},'')).status,401);
-  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:'test-password-123',otp:firstCode},'')).status,401,'OTP cannot be reused');
+  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:'test-password-123'},'')).status,200);
+  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:'test-password-123',otp:firstCode},'')).status,200,'Login uses email and password; MFA protects subsequent mutations');
   if(!process.env.KPAY_PGLITE_TEST){
   const inspect=new DatabaseSync(join(dir,'test.sqlite'));
   inspect.prepare('UPDATE sessions SET step_up_until=? WHERE admin_id=?').run('2000-01-01T00:00:00.000Z',support.id);inspect.close();

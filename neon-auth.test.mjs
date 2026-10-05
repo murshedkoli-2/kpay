@@ -21,7 +21,7 @@ test('Neon Auth verifies identities, invitations, revocation, cookies and MFA',a
  try{
   await assert.rejects(auth.neonLogin({...credentials,password:'wrong'}),e=>e.status===401);
   user.emailVerified=false;await assert.rejects(auth.neonLogin(credentials),e=>e.status===403);user.emailVerified=true;
-  const result=await auth.neonLogin(credentials);assert.equal(result.admin_role,'owner');assert.equal(result.token_hash,undefined);
+  const result=await auth.neonLogin(credentials);assert.equal(result.admin_role,'admin');assert.equal(result.token_hash,undefined);
   assert.equal((await auth.neonAuthenticate(result.token)).id,'owner');
   assert(!db.prepare('SELECT neon_cookie FROM sessions WHERE hash=?').get(hash(result.token)).neon_cookie.includes('test-token'));
   assert.throws(()=>login({key:'bootstrap'}),e=>e.status===401);
@@ -35,15 +35,15 @@ test('Neon Auth verifies identities, invitations, revocation, cookies and MFA',a
   db.prepare("UPDATE administrators SET status='suspended' WHERE id='owner'").run();assert.equal(await auth.neonAuthenticate(result.token),null);
   db.prepare("UPDATE administrators SET status='active' WHERE id='owner'").run();
   const seed=newTotpSecret();db.prepare("UPDATE administrators SET mfa_enabled=1,mfa_secret=? WHERE id='owner'").run(seed);
-  await assert.rejects(auth.neonLogin(credentials),e=>e.status===401);
-  const otp=totp(seed);const mfaSession=await auth.neonLogin({...credentials,otp});
-  await assert.rejects(auth.neonLogin({...credentials,otp}),e=>e.status===401);
+  const mfaSession=await auth.neonLogin({...credentials,role:'merchant'});
+  assert.equal(mfaSession.role,'admin');
+  assert.equal(db.prepare('SELECT step_up_until FROM sessions WHERE hash=?').get(hash(mfaSession.token)).step_up_until,null);
   revoked=true;await assert.rejects(auth.neonAuthenticate(mfaSession.token),e=>e.status===401);revoked=false;
   await auth.neonLogout(mfaSession.token);assert.equal(await auth.neonAuthenticate(mfaSession.token),null);
   revoked=false;user={id:'neon-merchant',email:'merchant@example.com',name:'Registered merchant',emailVerified:true};
   const merchantCredentials={...credentials,email:user.email,name:user.name,role:'merchant'};
   await auth.neonRegister(merchantCredentials);
-  await assert.rejects(auth.neonLogin(merchantCredentials),e=>e.status===403);
+  await assert.rejects(auth.neonLogin({...merchantCredentials,role:'admin'}),e=>e.status===403);
   db.prepare("UPDATE merchants SET status='active',providers='[\"bkash\"]' WHERE email=?").run(user.email);
   const merchantSession=await auth.neonLogin(merchantCredentials);
   assert.equal((await auth.neonAuthenticate(merchantSession.token)).kind,'merchant');

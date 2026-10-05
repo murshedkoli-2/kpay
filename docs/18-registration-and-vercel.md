@@ -4,11 +4,15 @@
 
 Staff roles, MFA, tenant isolation and financial approvals already existed. Missing pieces were public merchant registration, merchant email/password login and staff review of registrations. Deployment problems included automatic port binding, schema upgrades on every cold start, process-local rate limits and timer-based webhook delivery. Dashboard balances performed repeated queries for every merchant.
 
-Merchant registrations now start **pending**, with no enabled providers. In **Merchants → Manage**, staff review the business, choose approved providers and change status to **active**. Verified Neon users can then sign in using **Merchant account**. Public registration cannot assign administrator roles, enable providers or choose receiving accounts. Staff activation remains invitation-only. Merchant snapshots and detail responses exclude password hashes and identity bindings.
+Merchant registrations now start **pending**, with no enabled providers. In **Merchants → Manage**, staff review the business, choose approved providers and change status to **active**. Verified Neon users can then sign in through the shared email/password form. Public registration cannot assign administrator roles, enable providers or choose receiving accounts. Staff activation remains invitation-only. Merchant snapshots and detail responses exclude password hashes and identity bindings.
+
+## Unified sign-in
+
+Only Admin and Merchant roles exist. Login does not accept an account type or API key. Roles come from application records, not browser fields or Neon metadata. Legacy staff roles migrate to Admin; financial approvals still require different administrators. Enabled authenticators protect sensitive actions after login.
 
 ## Administrator credentials
 
-`npm run admin:setup` creates `NEON_OWNER_EMAIL` with a generated password and saves it in ignored `data/admin-credentials.json`. Existing account passwords remain unchanged. Complete email verification, then select **Administrator** to sign in. Save the password in your password manager. Enable MFA through Account security.
+`npm run admin:setup` creates `NEON_OWNER_EMAIL` with a generated password and saves it in ignored `data/admin-credentials.json`. Existing account passwords remain unchanged. Complete email verification, then sign in with email/password. Save the password in your password manager. Enable MFA through Account security.
 
 ## Vercel setup
 

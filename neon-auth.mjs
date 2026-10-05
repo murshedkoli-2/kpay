@@ -29,11 +29,14 @@ async function upstream(path,{body,cookie}={}){
 async function identity(cookie){const {data}=await upstream('get-session',{cookie});if(!data?.user?.id||!data?.session||new Date(data.session.expiresAt).getTime()<=Date.now())problem('Your Neon session expired. Please sign in.',401);if(data.user.emailVerified!==true)problem('Verify your email with Neon Auth before signing in.',403);return data.user;}
 export async function neonLogin(b){
  required(b.email,'Email');required(b.password,'Password',200);
- const result=await upstream('sign-in/email',{body:{email:b.email,password:b.password,rememberMe:false}});
+ const result=await upstream('sign-in/email',{body:{email:b.email.trim().toLowerCase(),password:b.password,rememberMe:false}});
  if(!result.cookie)problem('Neon Auth did not return a session',502);
  const user=await identity(result.cookie),email=user.email?.toLowerCase();
  return transaction(()=>{
-  if(b.role==='merchant'){
+  const matchingAdmin=db.prepare('SELECT id FROM administrators WHERE neon_user_id=? OR LOWER(email)=?').get(user.id,email);
+  const matchingMerchant=db.prepare('SELECT id FROM merchants WHERE neon_user_id=? OR LOWER(email)=?').get(user.id,email);
+  if(matchingAdmin&&matchingMerchant)problem('Account email conflict. Contact an administrator.',403);
+  if(!matchingAdmin&&email!==ownerEmail){
    let merchant=db.prepare('SELECT * FROM merchants WHERE neon_user_id=?').get(user.id);
    if(!merchant){merchant=db.prepare('SELECT * FROM merchants WHERE email=?').get(email);if(!merchant||merchant.neon_user_id||merchant.registration_source!=='self')problem('No registered merchant account matches this identity',403);if(merchant.status!=='active')problem('Your merchant account is awaiting approval or suspended',403);db.prepare('UPDATE merchants SET neon_user_id=? WHERE id=?').run(user.id,merchant.id);}
    if(merchant.status!=='active')problem('Your merchant account is awaiting approval or suspended',403);
@@ -48,7 +51,7 @@ export async function neonLogin(b){
    audit(admin,'Neon identity linked',admin.id);
   }
   if(admin.status!=='active')problem('Workspace access is suspended.',403);
-  const session=createSession(admin,b.otp);
+  const session=createSession(admin);
   db.prepare('UPDATE sessions SET neon_cookie=? WHERE hash=?').run(seal(result.cookie),session.token_hash);
   delete session.token_hash;return session;
  });

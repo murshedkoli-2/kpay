@@ -1,0 +1,10 @@
+data/
+node_modules/
+.npm-cache/
+.env
+.env.*
+!.env.example
+*.log
+agent-android/build/
+*.p12
+*.jks

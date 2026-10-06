@@ -70,7 +70,7 @@ Merchant payout destinations and payouts require separate maker/checker identiti
 
 ## API and device integration
 
-Current runnable endpoints use `/api`, documented in [the implementation guide](docs/16-admin-implementation.md). Target `/v1` contracts in the planning documents are a future public API migration.
+Merchant websites use `/api/v1/payments` to create and query payments. Open [the integration guide](https://kpay-six.vercel.app/integration.html), or sign in as a merchant and choose **API integration** to create/revoke keys, configure signed webhooks, inspect deliveries, and create hosted checkout links. A runnable Node.js 24 website example is downloadable from the guide. Legacy administration and agent endpoints continue to use `/api`.
 
 Merchant credentials only authorize their own data and provider selection; merchants cannot select arbitrary receiving numbers. The old prototype `/api/accounts` and `/api/templates` writes are replaced by `/api/admin/...` routes. Bootstrap keys cannot sign in or authorize admin API requests.
 

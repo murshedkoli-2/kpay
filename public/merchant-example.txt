@@ -1,0 +1,37 @@
+// Save as merchant-server.mjs. Requires Node.js 24. Never put API secrets in browser JavaScript.
+import http from 'node:http';
+import {randomUUID,createHmac,timingSafeEqual} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
+const base=(process.env.KPAY_BASE_URL||'https://kpay-six.vercel.app').replace(/\/$/,''),key=process.env.KPAY_API_KEY,signing=process.env.KPAY_WEBHOOK_SECRET;
+if(!key||!signing)throw new Error('Set KPAY_API_KEY and KPAY_WEBHOOK_SECRET');
+const db=new DatabaseSync('merchant-orders.sqlite');
+db.exec(`CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY,amount TEXT,payment_id TEXT UNIQUE,status TEXT);CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY);`);
+async function api(path,body){const r=await fetch(base+'/api/v1/'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});const result=await r.json();if(!r.ok)throw new Error(result.error||'kPay unavailable');return result;}
+http.createServer(async(req,res)=>{
+ try{
+  if(req.method==='GET'&&req.url==='/'){res.setHeader('Content-Type','text/html');return res.end('<h1>Example product — BDT 100.00</h1><form method="POST" action="/pay"><button>Pay with kPay</button></form>');}
+  if(req.method==='POST'&&req.url==='/pay'){
+   // Real websites reuse the saved order ID on retries and derive prices from their database.
+   const order=randomUUID(),amount='100.00';db.prepare('INSERT INTO orders VALUES (?,?,NULL,?)').run(order,amount,'pending');
+   const p=await api('payments',{order_id:order,amount,currency:'BDT',provider:process.env.KPAY_PROVIDER||'nagad'});
+   db.prepare('UPDATE orders SET payment_id=? WHERE id=?').run(p.id,order);
+   res.writeHead(303,{Location:p.checkout_url});return res.end();
+  }
+  if(req.method==='POST'&&req.url==='/webhooks/kpay'){
+   const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>65536)throw new Error('Body too large');chunks.push(chunk);}const raw=Buffer.concat(chunks).toString('utf8');
+   const timestamp=req.headers['x-kpay-timestamp'],signature=req.headers['x-kpay-signature'];
+   if(typeof timestamp!=='string'||!/^\d+$/.test(timestamp)||Math.abs(Date.now()/1000-Number(timestamp))>300)throw new Error('Invalid timestamp');
+   const expected='v1='+createHmac('sha256',signing).update(timestamp+'.'+raw).digest('hex');
+   if(typeof signature!=='string'||Buffer.byteLength(signature)!==Buffer.byteLength(expected)||!timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))throw new Error('Invalid signature');
+   const e=JSON.parse(raw);if(e.id!==req.headers['x-kpay-event']||e.type!=='payment.verified')throw new Error('Invalid event');
+   if(db.prepare('SELECT id FROM events WHERE id=?').get(e.id))return res.end('Already processed');
+   const order=db.prepare('SELECT * FROM orders WHERE id=?').get(e.order_id);if(!order)throw new Error('Unknown order');
+   const p=await api('payments/'+encodeURIComponent(e.payment_id));
+   if(p.status!=='verified'||p.id!==order.payment_id||p.order_id!==order.id||p.amount!==order.amount||e.amount!==order.amount||p.currency!=='BDT'||e.currency!=='BDT')throw new Error('Order mismatch');
+   db.exec('BEGIN IMMEDIATE');try{db.prepare('INSERT OR IGNORE INTO events VALUES (?)').run(e.id);db.prepare("UPDATE orders SET status='paid' WHERE id=? AND status='pending'").run(order.id);db.exec('COMMIT');}catch(err){db.exec('ROLLBACK');throw err;}
+   // Trigger durable, idempotent fulfilment from paid orders in your worker, never from a browser redirect.
+   return res.end('Accepted');
+  }
+  res.writeHead(404);res.end('Not found');
+ }catch(err){console.error(err.message);res.writeHead(400);res.end('Request could not be processed. Please try again.');}
+}).listen(Number(process.env.PORT||8080),'127.0.0.1',()=>console.log('Example website: http://127.0.0.1:8080'));

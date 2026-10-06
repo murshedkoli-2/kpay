@@ -4,3 +4,5 @@
 .row{display:flex;align-items:center;gap:10px}.chart-bar{height:1%}
 
 .sidebar-footer .icon-button{margin-left:0;padding:4px}.sidebar-footer>div:nth-child(2){flex:1;min-width:0}.sidebar-footer strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:95px}
+/* Hosted payment checkout. */
+.checkout-shell{max-width:640px;margin:40px auto;padding:20px}.checkout-brand{display:block;font-size:28px;font-weight:700;color:#176b54;margin-bottom:20px}.checkout-shell h1{font-size:24px}.checkout-shell .field input{width:100%}.checkout-shell #check-status{margin-top:16px}.integration-code{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7f5;padding:16px;border-radius:10px;font-size:12px}

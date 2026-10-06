@@ -8,6 +8,7 @@ import {db,keyFor,now,audit,problem,hash} from './store.mjs';
 import {login,authenticate,dispatch,ingest,enroll,heartbeat,deviceConfig,permit} from './operations.mjs';
 import {deliverWebhook} from './webhooks.mjs';
 import {authenticateAgent} from './agent-security.mjs';
+import {merchantPayments,checkout,integration} from './merchant-api.mjs';
 import {neonAuthEnabled,neonSendVerification,neonVerifyEmail,neonForgotPassword,neonResetPassword,neonLogin,neonRegister,neonAuthenticate,neonLogout,assertBrowserOrigin,sessionCookie,cookieToken} from './neon-auth.mjs';
 function rateLimit(req,path){
  const ip=process.env.VERCEL?String(req.headers['x-forwarded-for']||'unknown').split(',')[0].trim():req.socket.remoteAddress||'local';
@@ -15,11 +16,11 @@ function rateLimit(req,path){
  const row=db.prepare('INSERT INTO rate_limits(key,count,window_start) VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN rate_limits.window_start=excluded.window_start THEN rate_limits.count+1 ELSE 1 END,window_start=excluded.window_start RETURNING count').get(key,start);
  if(row.count>30)problem('Too many attempts. Try again in a minute.',429);
 }
-const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml'};
-const files={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/favicon.svg':'favicon.svg'};
+const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8'};
+const files={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/favicon.svg':'favicon.svg','/checkout.html':'checkout.html','/checkout.js':'checkout.js','/integration.html':'integration.html','/merchant-example.txt':'merchant-example.txt'};
 const staticHeaders={'Content-Security-Policy':"default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cache-Control':'no-store'};
 export async function handler(req,res){
- const url=new URL(req.url,'http://localhost');const send=(code,data)=>{res.writeHead(code,{...staticHeaders,'Content-Type':'application/json'});res.end(JSON.stringify(data));if(process.env.VERCEL&&code<300&&req.method==='POST'&&(url.pathname.startsWith('/api/payments')||url.pathname==='/api/agent/receipts'))waitUntil(runWebhookBatch(3).catch(e=>console.error('Webhook batch failed:',e.message)));};
+ const url=new URL(req.url,'http://localhost');const send=(code,data)=>{res.writeHead(code,{...staticHeaders,'Content-Type':'application/json'});res.end(JSON.stringify(data));if(process.env.VERCEL&&code<300&&(url.pathname.startsWith('/api/v1/payments')||url.pathname.startsWith('/api/merchant/integration/webhook')||(req.method==='POST'&&(url.pathname.startsWith('/api/payments')||url.pathname==='/api/agent/receipts'||url.pathname==='/api/checkout/claim'))))waitUntil(runWebhookBatch(3).catch(e=>console.error('Webhook batch failed:',e.message)));};
  try{
   if(req.method==='GET'&&files[url.pathname]){const f=files[url.pathname];res.writeHead(200,{...staticHeaders,'Content-Type':mime[f.slice(f.lastIndexOf('.'))]});res.end(readFileSync(new URL('./public/'+f,import.meta.url)));return;}
   if(!url.pathname.startsWith('/api/'))return send(404,{error:'Not found'});
@@ -28,6 +29,7 @@ export async function handler(req,res){
   if(path==='cron/webhooks'&&req.method==='GET'){if(!process.env.CRON_SECRET||req.headers.authorization!=='Bearer '+process.env.CRON_SECRET)problem('Unauthorized',401);return send(200,await runWebhookBatch());}
   if(path==='auth/config'&&req.method==='GET')return send(200,{neon:neonAuthEnabled,registration:'merchant'});
   if(req.method==='POST')assertBrowserOrigin(req);
+  if(['checkout/status','checkout/claim'].includes(path)&&req.method==='POST'){rateLimit(req,path);return send(200,checkout(path.endsWith('/claim')?'claim':'status',b));}
   if(path==='auth/send-verification'&&req.method==='POST'){rateLimit(req,path);return send(200,await neonSendVerification(b));}
   if(path==='auth/verify-email'&&req.method==='POST'){rateLimit(req,path);return send(200,await neonVerifyEmail(b));}
   if(path==='forgot-password'&&req.method==='POST'){rateLimit(req,path);return send(200,await neonForgotPassword(b));}
@@ -48,6 +50,8 @@ export async function handler(req,res){
   if(path==='agent/receipts'&&req.method==='POST')return send(201,ingest(b,bearer));
   if(path==='logout'&&req.method==='POST'&&neonAuthEnabled){await neonLogout(token);res.setHeader('Set-Cookie',sessionCookie('',true));return send(200,{ok:true});}
   const actor=neonAuthEnabled?await neonAuthenticate(token):authenticate(token);if(!actor)return send(401,{error:'Your session expired. Please sign in.'});
+  if(path.startsWith('v1/')){rateLimit(req,'merchant-api:'+actor.id);return send(path==='v1/payments'&&req.method==='POST'?201:200,merchantPayments(actor,req.method,path,b,url));}
+  if(path.startsWith('merchant/integration')){rateLimit(req,'integration:'+actor.id);return send(200,integration(actor,req.method,path,b));}
   if(actor.token_hash)res.setHeader('Set-Cookie',sessionCookie(token,path==='logout'));
   if(path.match(/^admin\/webhooks\/[^/]+\/deliver$/)&&req.method==='POST'){permit(actor,'merchant');if(actor.mfa_enabled&&(!actor.step_up_until||actor.step_up_until<now()))problem('Authenticator confirmation required',403);const eid=path.split('/')[2];audit(actor,'Webhook delivery requested',eid,b.reason||'Operator retry');return send(200,await deliverWebhook(eid));}
   return send(200,dispatch(actor,req.method,path,b));

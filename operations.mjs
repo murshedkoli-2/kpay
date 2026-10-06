@@ -45,7 +45,7 @@ function snapshot(actor){
  const merchants=admin?db.prepare('SELECT * FROM merchants ORDER BY created DESC').all():[row('merchants',actor.id)];
  const accounts=db.prepare('SELECT id,provider,type,number,label,status,enabled,operation,instructions,minimum,maximum,daily_limit,version,created FROM accounts ORDER BY created DESC').all();
  const data={actor:{id:actor.id,name:actor.name,role:actor.role,kind:actor.kind,mfa_enabled:!!actor.mfa_enabled},accounts:admin?accounts:accounts.filter(a=>a.status==='active'),payments,merchants:merchants.map(({password_hash,neon_user_id,...m})=>({...m,available:accountBalance('merchant:'+m.id+':available'),reserved:accountBalance('merchant:'+m.id+':reserved')})),settings:admin?settings():{},ledger:admin?db.prepare('SELECT * FROM postings ORDER BY created DESC').all():[],entries:admin?db.prepare('SELECT * FROM entries').all():[],settlements:db.prepare(admin?'SELECT * FROM settlements ORDER BY created DESC':'SELECT * FROM settlements WHERE merchant_id=? ORDER BY created DESC').all(...(admin?[]:[actor.id]))};
- if(!admin)return data;
+ if(!admin){data.keys=db.prepare('SELECT id,prefix,status,created FROM merchant_keys WHERE merchant_id=? ORDER BY created DESC').all(actor.id);data.endpoints=db.prepare('SELECT url,enabled FROM webhook_endpoints WHERE merchant_id=?').all(actor.id);data.webhooks=db.prepare('SELECT id,event,payment_id,status,attempts,last_status,last_error,created FROM webhook_events WHERE merchant_id=? ORDER BY created DESC LIMIT 25').all(actor.id);return data;}
  data.destination_requests=db.prepare('SELECT * FROM destination_requests ORDER BY created DESC').all();
  Object.assign(data,{templates:db.prepare('SELECT * FROM templates ORDER BY created DESC').all(),fixtures:db.prepare('SELECT * FROM template_fixtures').all(),devices:db.prepare('SELECT id,name,account_id,status,sim,app_version,android_version,last_seen,queue_depth,permission,version,created,public_key,proposed_subscription,approved_subscription,binding_health,capture_paused FROM devices ORDER BY created DESC').all(),sms:db.prepare('SELECT id,device_id,account_id,sms_sender,status,reason,template_id,receipt_id,created FROM sms_events ORDER BY created DESC').all(),receipts:db.prepare('SELECT * FROM receipts ORDER BY created DESC').all(),reviews:db.prepare('SELECT * FROM reviews ORDER BY created DESC').all(),notes:db.prepare('SELECT * FROM review_notes ORDER BY created DESC').all(),users:db.prepare('SELECT * FROM users ORDER BY created DESC').all().map(u=>({...u,balance:accountBalance('user:'+u.id+':available')})),audit:db.prepare('SELECT * FROM audit ORDER BY created DESC').all(),administrators:actor.role==='admin'?db.prepare('SELECT id,name,email,role,status,created FROM administrators').all():[],webhooks:db.prepare('SELECT * FROM webhook_events ORDER BY created DESC').all(),webhook_attempts:db.prepare('SELECT * FROM webhook_attempts ORDER BY created DESC').all(),endpoints:db.prepare('SELECT merchant_id,url,enabled FROM webhook_endpoints').all(),reconciliation:db.prepare('SELECT * FROM reconciliation ORDER BY created DESC').all(),adjustments:db.prepare('SELECT * FROM adjustments ORDER BY created DESC').all(),keys:actor.role==='admin'?db.prepare('SELECT id,merchant_id,prefix,status,created FROM merchant_keys').all():[]});
  return data;
@@ -84,11 +84,16 @@ export function matchPayments(){
  });
 }
 export function createPayment(actor,b){
+ return transaction(()=>createPaymentInside(actor,b));
+}
+function createPaymentInside(actor,b){
  const merchant=actor.kind==='merchant'?row('merchants',actor.id):row('merchants',b.merchant_id||'demo_merchant');
+ // Serialize retries for the same merchant across PostgreSQL function instances.
+ db.prepare('UPDATE merchants SET version=version WHERE id=?').run(merchant.id);Object.assign(merchant,row('merchants',merchant.id));
  if(merchant.status!=='active')problem('Merchant is suspended');
  const amount=money(b.amount),order=required(b.order_id,'Order ID',100);
  const old=db.prepare('SELECT * FROM payments WHERE merchant=? AND order_id=?').get(merchant.id,order);
- if(old){if(old.amount!==amount||(b.account_id&&old.account_id!==b.account_id))problem('Order ID already used with different details',409);return old;}
+ if(old){const previous=db.prepare('SELECT provider FROM accounts WHERE id=?').get(old.account_id);if(old.amount!==amount||(b.provider&&previous.provider!==b.provider)||(b.account_id&&old.account_id!==b.account_id))problem('Order ID already used with different details',409);return old;}
  const user=b.beneficiary_type==='user'&&actor.kind==='admin'?row('users',b.user_id):null;
  if(user&&user.status!=='active')problem('User is suspended');
  let a;
@@ -98,7 +103,9 @@ export function createPayment(actor,b){
    enumValue(b.provider,JSON.parse(merchant.providers),'enabled provider');
    a=db.prepare("SELECT * FROM accounts WHERE provider=? AND status='active' ORDER BY created").all(b.provider).find(x=>{try{accountEligible(x);return amount>=x.minimum&&amount<=x.maximum;}catch{return false;}});
  }
- if(!a||a.status!=='active')problem('No eligible central receiving account');accountEligible(a);
+ if(!a||a.status!=='active')problem('No eligible central receiving account');
+ db.prepare('UPDATE accounts SET version=version WHERE id=?').run(a.id);a=row('accounts',a.id);
+ if(a.status!=='active')problem('No eligible central receiving account');accountEligible(a);
  if(amount<a.minimum||amount>a.maximum)problem('Amount exceeds receiving account limits');
  const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Dhaka'});
  const allocated=db.prepare("SELECT amount,created FROM payments WHERE account_id=? AND status NOT IN ('cancelled','rejected')").all(a.id).filter(p=>new Date(p.created).toLocaleDateString('en-CA',{timeZone:'Asia/Dhaka'})===day).reduce((s,p)=>s+p.amount,0);

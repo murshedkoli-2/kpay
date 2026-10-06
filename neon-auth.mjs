@@ -5,13 +5,14 @@ import {registrationFields,saveRegistration} from './merchant-registration.mjs';
 
 export const neonAuthEnabled=!!process.env.NEON_AUTH_BASE_URL;
 if(process.env.VERCEL&&!neonAuthEnabled)throw new Error('NEON_AUTH_BASE_URL is required on Vercel');
-const base=process.env.NEON_AUTH_BASE_URL?.replace(/\/$/,'');
+const base=process.env.NEON_AUTH_BASE_URL?.trim().replace(/\/$/,'');
 const ownerEmail=process.env.NEON_OWNER_EMAIL?.trim().toLowerCase();
-const origin=process.env.APP_ORIGIN||'http://127.0.0.1:3000';
+const origin=process.env.APP_ORIGIN?.trim()||'http://127.0.0.1:3000';
+function configuredURL(value,name){try{return new URL(value);}catch{throw new Error(name+' must be a valid absolute URL');}}
 if(neonAuthEnabled){
- if(new URL(base).protocol!=='https:'&&!process.env.KPAY_AUTH_TEST)throw new Error('NEON_AUTH_BASE_URL requires HTTPS');
+ if(configuredURL(base,'NEON_AUTH_BASE_URL').protocol!=='https:'&&!process.env.KPAY_AUTH_TEST)throw new Error('NEON_AUTH_BASE_URL requires HTTPS');
  if(!/^[a-f\d]{64}$/i.test(process.env.AUTH_ENCRYPTION_KEY||''))throw new Error('AUTH_ENCRYPTION_KEY must be a random 32-byte hex key');
- if((process.env.NODE_ENV==='production'||process.env.VERCEL)&&new URL(origin).protocol!=='https:')throw new Error('APP_ORIGIN requires HTTPS in production');
+ if((process.env.NODE_ENV==='production'||process.env.VERCEL)&&configuredURL(origin,'APP_ORIGIN').protocol!=='https:')throw new Error('APP_ORIGIN requires HTTPS in production');
 }
 function seal(value){const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',Buffer.from(process.env.AUTH_ENCRYPTION_KEY,'hex'),iv);const data=Buffer.concat([cipher.update(value,'utf8'),cipher.final()]);return Buffer.concat([iv,cipher.getAuthTag(),data]).toString('base64');}
 function unseal(value){const data=Buffer.from(value,'base64'),cipher=createDecipheriv('aes-256-gcm',Buffer.from(process.env.AUTH_ENCRYPTION_KEY,'hex'),data.subarray(0,12));cipher.setAuthTag(data.subarray(12,28));return Buffer.concat([cipher.update(data.subarray(28)),cipher.final()]).toString('utf8');}
@@ -75,7 +76,7 @@ export async function neonLogin(b){
 }
 export async function neonRegister(b){
  if(b.role==='merchant'){const fields=registrationFields(b);await upstream('sign-up/email',{body:{...fields,callbackURL:origin}});return saveRegistration(fields,{neon:true});}
- const email=required(b.email,'Email').toLowerCase(),password=required(b.password,'Password',200);
+ const email=required(b.email,'Email').toLowerCase();required(b.password,'Password',128);const password=b.password;
  if(password.length<12)problem('Use at least 12 password characters');
  const admin=db.prepare("SELECT id FROM administrators WHERE email=? AND status='active'").get(email);
  if(!admin&&email!==ownerEmail)problem('An active workspace administrator invitation is required.',403);

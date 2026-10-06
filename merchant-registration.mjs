@@ -1,6 +1,6 @@
 import {db,id,now,required,problem,passwordHash,audit,transaction} from './store.mjs';
 export function registrationFields(b){
- const email=required(b.email,'Email').toLowerCase(),name=required(b.name,'Business name',100),password=required(b.password,'Password',128);
+ const email=required(b.email,'Email').toLowerCase(),name=required(b.name,'Business name',100);required(b.password,'Password',128);const password=b.password;
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))problem('Enter a valid email address');
  if(password.length<12)problem('Use at least 12 password characters');
  if(db.prepare('SELECT id FROM merchants WHERE email=?').get(email)||db.prepare('SELECT id FROM administrators WHERE email=?').get(email)||email===process.env.NEON_OWNER_EMAIL?.toLowerCase())problem('This email already belongs to an account',409);

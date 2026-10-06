@@ -4,11 +4,11 @@ Native Android app for centrally assigned bKash, Nagad and Rocket collection pho
 
 ## Development installation
 
-The signed development APK is `../artifacts/kpay-agent-debug.apk`. Minimum Android 10, target Android 15. Development server is compiled as `http://127.0.0.1:3000`; the app restricts HTTP to that loopback origin.
+The signed development APK is `../artifacts/kpay-agent-debug.apk`. Version 1.1 (code 2), minimum Android 10, target Android 15. The supplied APK connects to `https://kpay-six.vercel.app` and disables cleartext traffic. It retains the development signing certificate for upgrades and includes test instrumentation.
 
-1. Run `npm start` from the repository root.
+1. Confirm the deployed backend is available and configure collection accounts in Admin.
 2. Connect a test Android phone over USB with USB debugging enabled.
-3. Run `adb install -r artifacts/kpay-agent-debug.apk` and `adb reverse tcp:3000 tcp:3000`. Keep the USB connection for this local development configuration.
+3. Run `adb install -r artifacts/kpay-agent-debug.apk`, or use your managed installer. The supplied HTTPS build does not require USB networking.
 4. Add a central receiving account and publish tested SMS templates in Admin.
 5. Create an agent device and enter its ten-minute pairing code in the app. Enrollment requires a Keystore key proof and waits for approval.
 6. Open Health, read the disclosure, grant SMS/phone permissions, and select the physical SIM slot. Sync once.
@@ -76,3 +76,9 @@ Run this only on a test device: it writes clearly labelled synthetic local queue
 - Exercise APK update with the same signing certificate and retain pending receipts.
 
 Subscription IDs identify Android subscriptions, not cryptographic SIM ownership. Signed uploads prove possession of the enrolled device key, not provider-authenticated payment or untampered SMS. Hardware attestation, rooted-device policy, production backend encryption and real provider reconciliation remain rollout requirements.
+
+## Version 1.1 review
+
+Fixed queued work remaining after a 50-receipt batch or a delayed retry, duplicate-capture races, shared cancellation state between background jobs, and permission revocation while reading subscriptions. SIM metadata accepts the standard Android subscription extra and the legacy extra; conflicting values remain quarantined. HTTP 403 preserves queued evidence for administrator attention. HTTPS builds disable cleartext traffic and generate an updated SHA-256 file.
+
+The APK compiles and its signature/package metadata verify. Server-side signed-device tests pass. Expanded Android smoke tests compile, but could not run on the build computer because the configured emulator system image is missing and no phone is connected. Real SMS, dual-SIM behavior and background scheduling still need device acceptance testing.

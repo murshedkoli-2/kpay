@@ -8,7 +8,7 @@ import org.json.*;
 
 final class Device {
  static boolean permitted(Context c){return c.checkSelfPermission(Manifest.permission.RECEIVE_SMS)==PackageManager.PERMISSION_GRANTED;}
- static List<SubscriptionInfo> sims(Context c){if(c.checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)return Collections.emptyList();SubscriptionManager s=c.getSystemService(SubscriptionManager.class);List<SubscriptionInfo> list=s.getActiveSubscriptionInfoList();return list==null?Collections.emptyList():list;}
+ static List<SubscriptionInfo> sims(Context c){if(c.checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)return Collections.emptyList();SubscriptionManager s=c.getSystemService(SubscriptionManager.class);List<SubscriptionInfo> list;try{list=s.getActiveSubscriptionInfoList();}catch(SecurityException e){return Collections.emptyList();}return list==null?Collections.emptyList():list;}
  static int selected(Context c){return c.getSharedPreferences("settings",0).getInt("subscription",-1);}
  static boolean healthy(Context c){for(SubscriptionInfo s:sims(c))if(s.getSubscriptionId()==selected(c))return true;return false;}
  static JSONObject config(Context c) throws Exception {String s=Vault.get(c,"config");return s.isEmpty()?new JSONObject():new JSONObject(s);}

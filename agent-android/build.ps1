@@ -18,11 +18,11 @@ $debugLiteral=if($Release){'false'}else{'true'}
 $origin=$Server.TrimEnd('/')
 Set-Content -LiteralPath "$build\generated\bd\kpay\agent\BuildConfig.java" -Encoding utf8 -Value "package bd.kpay.agent; final class BuildConfig { static final String SERVER = `"$origin`"; static final boolean DEBUG = $debugLiteral; }"
 $manifest=Get-Content -LiteralPath "$agentRoot\AndroidManifest.xml" -Raw
-if($Release){$manifest=$manifest.Replace('android:usesCleartextTraffic="true"','android:usesCleartextTraffic="false"')}
-else{$manifest=$manifest.Replace('<application android:label','<application android:debuggable="true" android:label').Replace('</manifest>','<instrumentation android:name="bd.kpay.agent.SmokeTest" android:targetPackage="bd.kpay.agent" /></manifest>')}
+if($Release -or $serverUri.Scheme -eq 'https'){$manifest=$manifest.Replace('android:usesCleartextTraffic="true"','android:usesCleartextTraffic="false"')}
+if(!$Release){$manifest=$manifest.Replace('<application android:label','<application android:debuggable="true" android:label').Replace('</manifest>','<instrumentation android:name="bd.kpay.agent.SmokeTest" android:targetPackage="bd.kpay.agent" /></manifest>')}
 Set-Content -LiteralPath "$build\AndroidManifest.xml" -Value $manifest -Encoding utf8
 Run "$tools\aapt2.exe" @('compile','--dir',"$agentRoot\res",'-o',"$build\resources.zip")
-Run "$tools\aapt2.exe" @('link','-o',"$build\base.apk",'-I',$androidJar,'--manifest',"$build\AndroidManifest.xml",'--java',"$build\generated",'--min-sdk-version','29','--target-sdk-version','35','--version-code','1','--version-name','1.0',"$build\resources.zip")
+Run "$tools\aapt2.exe" @('link','-o',"$build\base.apk",'-I',$androidJar,'--manifest',"$build\AndroidManifest.xml",'--java',"$build\generated",'--min-sdk-version','29','--target-sdk-version','35','--version-code','2','--version-name','1.1',"$build\resources.zip")
 $sources=@(Get-ChildItem "$agentRoot\src","$build\generated" -Recurse -Filter '*.java' | ForEach-Object FullName)
 if(!$Release){$sources+=@(Get-ChildItem "$agentRoot\test" -Recurse -Filter '*.java' | ForEach-Object FullName)}
 Run 'javac' (@('-encoding','UTF-8','--release','8','-classpath',$androidJar,'-d',"$build\classes")+$sources)
@@ -37,4 +37,6 @@ if(!$Release){$SigningKey="$build\development.p12";$SigningAlias='kpay-developme
 $apk=Join-Path $out $(if($Release){'kpay-agent-release.apk'}else{'kpay-agent-debug.apk'})
 Run "$tools\apksigner.bat" @('sign','--ks',$SigningKey,'--ks-key-alias',$SigningAlias,'--ks-pass',"env:$KeyPassEnv",'--key-pass',"env:$KeyPassEnv",'--out',$apk,"$build\aligned.apk")
 Run "$tools\apksigner.bat" @('verify','--verbose',$apk)
+$checksum=(Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+(Split-Path -Leaf $apk)
+Set-Content -LiteralPath ($apk+'.sha256') -Value $checksum -Encoding utf8
 Write-Output "Built $apk"

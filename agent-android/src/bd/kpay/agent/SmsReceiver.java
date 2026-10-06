@@ -2,6 +2,7 @@ package bd.kpay.agent;
 import android.content.*;
 import android.provider.Telephony;
 import android.telephony.SmsMessage;
+import android.telephony.SubscriptionManager;
 import org.json.*;
 import java.util.UUID;
 
@@ -9,6 +10,17 @@ public class SmsReceiver extends BroadcastReceiver {
  public void onReceive(Context c,Intent intent){
   if(!Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(intent.getAction()))return;
   PendingResult pending=goAsync();new Thread(()->{try{capture(c.getApplicationContext(),intent);}catch(Exception e){c.getSharedPreferences("health",0).edit().putString("capture_error","Receipt could not be persisted. Check available storage and app setup.").commit();}finally{pending.finish();}},"kpay-capture").start();
+ }
+ static int subscription(Intent intent){
+  if(intent.getExtras()==null)return -1;
+  int found=-1;
+  for(String key:new String[]{SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,"subscription"}){
+   if(!intent.hasExtra(key))continue;
+   Object value=intent.getExtras().get(key);
+   if(!(value instanceof Integer)||((Integer)value)<0)return -1;
+   int current=(Integer)value;if(found>=0&&found!=current)return -1;found=current;
+  }
+  return found;
  }
  static void capture(Context c,Intent intent) throws Exception {
   if(c.getSharedPreferences("settings",0).getBoolean("paused",false)||Vault.get(c,"key").isEmpty())return;
@@ -18,7 +30,7 @@ public class SmsReceiver extends BroadcastReceiver {
   // Never forward OTP/security messages even when a provider uses the same sender.
   if(body.toString().matches("(?is).*(\\bOTP\\b|one[ -]time|verification code|security code|\\bPIN\\b|password|ওটিপি|পিন|পাসওয়ার্ড).*"))return;
   if(body.length()==0||body.length()>config.optInt("max_message_length",4000))return;
-  int sub=-1;Object extra=intent.getExtras()==null?null:intent.getExtras().get("subscription");if(extra instanceof Number)sub=((Number)extra).intValue();
+  int sub=subscription(intent);
   JSONObject account=config.optJSONObject("account");if(account==null)return;
   boolean bound=sub>=0&&sub==Device.selected(c)&&sub==config.optInt("approved_subscription",-1)&&Device.healthy(c);
   long received=System.currentTimeMillis(),smsTime=parts[0].getTimestampMillis();

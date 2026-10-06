@@ -19,5 +19,5 @@ final class Api {
    JSONObject r;try{r=new JSONObject(response);}catch(Exception e){throw new Failure(status,"Invalid server response ("+status+")");}if(status<200||status>=300)throw new Failure(status,r.optString("error","Server error"));return r;
   }finally{c.disconnect();}
  }
- static void enroll(Context c,String code) throws Exception {String key=Vault.publicKey();JSONObject b=new JSONObject().put("code",code).put("public_key",key).put("proof",Vault.sign("kpay-enroll\n"+code+"\n"+key)).put("app_version","android-1.1").put("android_version",android.os.Build.VERSION.RELEASE);JSONObject r=call(c,"POST","/api/agent/enroll",b,false);Vault.save(c,"key",r.getString("key"));Vault.save(c,"device_id",r.getString("device_id"));}
+ static void enroll(Context c,String code) throws Exception {String key=Vault.publicKey();JSONObject b=new JSONObject().put("code",code).put("public_key",key).put("proof",Vault.sign("kpay-enroll\n"+code+"\n"+key)).put("app_version","android-1.2").put("android_version",android.os.Build.VERSION.RELEASE);JSONObject r=call(c,"POST","/api/agent/enroll",b,false);Vault.save(c,"key",r.getString("key"));Vault.save(c,"device_id",r.getString("device_id"));}
 }

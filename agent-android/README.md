@@ -4,7 +4,7 @@ Native Android app for centrally assigned bKash, Nagad and Rocket collection pho
 
 ## Development installation
 
-The signed development APK is `../artifacts/kpay-agent-debug.apk`. Version 1.1 (code 2), minimum Android 10, target Android 15. The supplied APK connects to `https://kpay-six.vercel.app` and disables cleartext traffic. It retains the development signing certificate for upgrades and includes test instrumentation.
+The signed development APK is `../artifacts/kpay-agent-debug.apk`. Version 1.2 (code 3), minimum Android 10, target Android 15. The supplied APK connects to `https://kpay-six.vercel.app` and disables cleartext traffic. It retains the development signing certificate for upgrades and includes test instrumentation.
 
 1. Confirm the deployed backend is available and configure collection accounts in Admin.
 2. Connect a test Android phone over USB with USB debugging enabled.
@@ -82,3 +82,7 @@ Subscription IDs identify Android subscriptions, not cryptographic SIM ownership
 Fixed queued work remaining after a 50-receipt batch or a delayed retry, duplicate-capture races, shared cancellation state between background jobs, and permission revocation while reading subscriptions. SIM metadata accepts the standard Android subscription extra and the legacy extra; conflicting values remain quarantined. HTTP 403 preserves queued evidence for administrator attention. HTTPS builds disable cleartext traffic and generate an updated SHA-256 file.
 
 The APK compiles and its signature/package metadata verify. Server-side signed-device tests pass. Expanded Android smoke tests compile, but could not run on the build computer because the configured emulator system image is missing and no phone is connected. Real SMS, dual-SIM behavior and background scheduling still need device acceptance testing.
+
+## Installation build 1.2
+
+The separately named `../artifacts/kpay-agent-v1.2.apk` retains the existing certificate, increases the update version, and explicitly includes v1/v2/v3 signatures. Signature verification for Android 16 and ZIP alignment pass. This is a compatibility rebuild; a generic phone message of “App not installed” does not identify the underlying installer error. No phone is connected to confirm installation. Do not uninstall an agent with pending receipts to work around an update conflict. The build removes stale incremental-install `.idsig` sidecars.

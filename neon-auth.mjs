@@ -2,12 +2,13 @@ import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 import {db,problem,required,audit,transaction,now} from './store.mjs';
 import {createSession,createMerchantSession,authenticate} from './operations.mjs';
 import {registrationFields,saveRegistration} from './merchant-registration.mjs';
+import {applicationOrigin} from './auth-config.mjs';
 
 export const neonAuthEnabled=!!process.env.NEON_AUTH_BASE_URL;
 if(process.env.VERCEL&&!neonAuthEnabled)throw new Error('NEON_AUTH_BASE_URL is required on Vercel');
 const base=process.env.NEON_AUTH_BASE_URL?.trim().replace(/\/$/,'');
 const ownerEmail=process.env.NEON_OWNER_EMAIL?.trim().toLowerCase();
-const origin=process.env.APP_ORIGIN?.trim()||'http://127.0.0.1:3000';
+const origin=applicationOrigin();
 function configuredURL(value,name){try{return new URL(value);}catch{throw new Error(name+' must be a valid absolute URL');}}
 if(neonAuthEnabled){
  if(configuredURL(base,'NEON_AUTH_BASE_URL').protocol!=='https:'&&!process.env.KPAY_AUTH_TEST)throw new Error('NEON_AUTH_BASE_URL requires HTTPS');

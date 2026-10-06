@@ -57,8 +57,8 @@ test('admin setup, evidence matching, access rules and settlement ledger',async(
   const key=await ok('admin/merchants/'+merchant.id+'/keys',{reason:'Integration test'});
   assert.equal((await req('payments/'+p.id,undefined,key.key)).status,404);assert.equal((await ok('state',undefined,key.key)).payments.length,0);
   // Support can investigate, but cannot access raw evidence or mutate collection accounts.
-  const support=await ok('admin/administrators',{name:'Support test',email:'support@test.local',role:'admin',password:'test-password-123',reason:'Test team'});
-  const supportToken=(await ok('login',{role:'admin',email:'support@test.local',password:'test-password-123'},'')).token;
+  const support=await ok('admin/administrators',{name:'Support test',email:'support@test.local',role:'admin',password:' test-password-123 ',reason:'Test team'});
+  const supportToken=(await ok('login',{role:'admin',email:'support@test.local',password:' test-password-123 '},'')).token;
   assert.equal((await req('admin/detail/sms/'+unparsed.data.id,undefined,supportToken)).status,200);
   assert.equal((await req('admin/detail/templates/'+t.id,undefined,supportToken)).status,200);
   assert.equal((await req('admin/accounts',{...accountBody,number:'01712345679'},supportToken)).status,200);
@@ -102,8 +102,8 @@ test('admin setup, evidence matching, access rules and settlement ledger',async(
   const setup=await ok('admin/security/start',{},supportToken);
   const firstTime=Date.now(),firstCode=totp(setup.secret,firstTime);
   await ok('admin/security/confirm',{otp:firstCode},supportToken);
-  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:'test-password-123'},'')).status,200);
-  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:'test-password-123',otp:firstCode},'')).status,200,'Login uses email and password; MFA protects subsequent mutations');
+  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:' test-password-123 '},'')).status,200);
+  assert.equal((await req('login',{role:'admin',email:'support@test.local',password:' test-password-123 ',otp:firstCode},'')).status,200,'Login uses email and password; MFA protects subsequent mutations');
   if(!process.env.KPAY_PGLITE_TEST){
   const inspect=new DatabaseSync(join(dir,'test.sqlite'));
   inspect.prepare('UPDATE sessions SET step_up_until=? WHERE admin_id=?').run('2000-01-01T00:00:00.000Z',support.id);inspect.close();

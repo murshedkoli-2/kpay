@@ -18,8 +18,10 @@ export function parseSMS(pattern,message) {
   const names=[]; const seen=new Set();
   const escape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   let source='',last=0;
-  for(const m of pattern.matchAll(/\{\{(sender|transaction|amount)\}\}/g)) {
+  const ignored={reference:'[A-Za-z0-9 -]{1,80}',balance:'[\\d,]+(?:\\.\\d{1,2})?',date:'\\d{2}/\\d{2}/\\d{4}',time:'\\d{2}:\\d{2}'};
+  for(const m of pattern.matchAll(/\{\{(sender|transaction|amount|reference|balance|date|time)\}\}/g)) {
     source+=escape(pattern.slice(last,m.index));
+    if(ignored[m[1]]){source+='(?:'+ignored[m[1]]+')';last=m.index+m[0].length;continue;}
     if(seen.has(m[1])) throw new Error('Use each field exactly once');
     names.push(m[1]);seen.add(m[1]);
     source+=m[1]==='sender'?'([+\\d -]{11,18})':m[1]==='amount'?'([\\d,]+(?:\\.\\d{1,2})?)':'([A-Za-z0-9-]{3,80})';

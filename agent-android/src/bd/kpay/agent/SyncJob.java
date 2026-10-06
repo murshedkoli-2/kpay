@@ -21,6 +21,8 @@ public class SyncJob extends JobService {
    if(stopped.get())return true;
    JSONObject config=Api.call(c,"GET","/api/agent/config",null,true);Vault.save(c,"config",config.toString());
    if(!config.optString("status").equals("active")){health(c,"Device "+config.optString("status")+". Admin approval is required.");return false;}
+   if(config.optJSONArray("sms_senders")==null||config.optJSONArray("sms_senders").length()==0){health(c,"No published SMS template. Ask the administrator to publish a template for this account.");return false;}
+   if(config.optJSONObject("account")==null||!config.getJSONObject("account").optString("status").equals("active")){health(c,"Receiving account is paused. Ask the administrator to activate it.");return false;}
    if(!Device.permitted(c)||!Device.healthy(c)||config.optInt("approved_subscription",-1)!=sub){health(c,"SMS permission or approved SIM binding needs attention");return false;}
    boolean retry=false;
    for(JSONObject row:q.list(true)){

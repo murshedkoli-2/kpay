@@ -120,7 +120,7 @@ export function claimPayment(actor,pid,b){
 function parseEvent(e){
  const a=row('accounts',e.account_id);
  if(a.status==='quarantined'||a.status==='retired'){db.prepare("UPDATE sms_events SET status='quarantined',reason=? WHERE id=?").run('Receiving account is quarantined or retired',e.id);review('sms',e.id,'Account quarantined');return;}
- const candidates=db.prepare("SELECT * FROM templates WHERE provider=? AND type=? AND operation=? AND sms_sender=? AND status='published' AND enabled=1").all(a.provider,a.type,a.operation,e.sms_sender);
+ const candidates=db.prepare("SELECT * FROM templates WHERE provider=? AND type=? AND operation=? AND LOWER(sms_sender)=LOWER(?) AND status='published' AND enabled=1").all(a.provider,a.type,a.operation,e.sms_sender);
  const parsed=[];
  for(const t of candidates){try{const p=parseSMS(t.pattern,e.message);parsed.push({t,p});db.prepare('INSERT INTO parse_attempts VALUES (?,?,?,?,?)').run(id(),e.id,t.id,JSON.stringify(p),now());}catch(error){db.prepare('INSERT INTO parse_attempts VALUES (?,?,?,?,?)').run(id(),e.id,t.id,JSON.stringify({error:error.message}),now());}}
  if(!parsed.length){db.prepare("UPDATE sms_events SET status='unparsed',reason='No eligible template matched' WHERE id=?").run(e.id);review('sms',e.id,'Unrecognized payment SMS');return;}

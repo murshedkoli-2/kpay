@@ -13,6 +13,11 @@ public class SmokeTest extends Instrumentation {
  public void onCreate(Bundle b){super.onCreate(b);arguments=b;start();}
  void check(boolean condition,String label){if(!condition)throw new AssertionError(label);}
  public void onStart(){Bundle result=new Bundle();try{
+  if(arguments!=null&&arguments.getString("diagnostics","").equals("true")){
+   Context diagnostic=getTargetContext();JSONObject cfg=Device.config(diagnostic);
+   JSONObject summary=new JSONObject().put("paired",!Vault.get(diagnostic,"key").isEmpty()).put("status",cfg.optString("status")).put("senders",cfg.optJSONArray("sms_senders")).put("selected_subscription",Device.selected(diagnostic)).put("approved_subscription",cfg.optInt("approved_subscription",-1)).put("sim_healthy",Device.healthy(diagnostic)).put("sms_permission",Device.permitted(diagnostic));
+   JSONObject counts=new JSONObject();try(Queue q=new Queue(diagnostic)){for(JSONObject row:q.list(false)){String state=row.getString("state");counts.put(state,counts.optInt(state)+1);}}summary.put("receipt_states",counts);result.putString("diagnostics",summary.toString());finish(Activity.RESULT_OK,result);return;
+  }
   Context c=getTargetContext();Vault.init();String encrypted=Vault.encrypt("Synthetic payment evidence");check(!encrypted.contains("Synthetic"),"Local payload is encrypted");check(Vault.decrypt(encrypted).equals("Synthetic payment evidence"),"Encryption roundtrip");Vault.save(c,"smoke-secret","test credential");check(Vault.get(c,"smoke-secret").equals("test credential"),"Encrypted credential roundtrip");
   JSONObject config=new JSONObject().put("sms_senders",new JSONArray().put("bKash"));check(Device.allowed(config,"bkash"),"Allowlist is case insensitive");check(!Device.allowed(config,"Unrelated"),"Unrelated sender is excluded");
   Intent metadata=new Intent();check(SmsReceiver.subscription(metadata)==-1,"Missing SIM metadata quarantines");metadata.putExtra("subscription",7);check(SmsReceiver.subscription(metadata)==7,"Legacy SIM metadata");metadata.putExtra(android.telephony.SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,7);check(SmsReceiver.subscription(metadata)==7,"Standard SIM metadata");metadata.putExtra(android.telephony.SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,8);check(SmsReceiver.subscription(metadata)==-1,"Conflicting SIM metadata quarantines");

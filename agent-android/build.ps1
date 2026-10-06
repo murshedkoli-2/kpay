@@ -22,7 +22,7 @@ if($Release -or $serverUri.Scheme -eq 'https'){$manifest=$manifest.Replace('andr
 if(!$Release){$manifest=$manifest.Replace('<application android:label','<application android:debuggable="true" android:label').Replace('</manifest>','<instrumentation android:name="bd.kpay.agent.SmokeTest" android:targetPackage="bd.kpay.agent" /></manifest>')}
 Set-Content -LiteralPath "$build\AndroidManifest.xml" -Value $manifest -Encoding utf8
 Run "$tools\aapt2.exe" @('compile','--dir',"$agentRoot\res",'-o',"$build\resources.zip")
-Run "$tools\aapt2.exe" @('link','-o',"$build\base.apk",'-I',$androidJar,'--manifest',"$build\AndroidManifest.xml",'--java',"$build\generated",'--min-sdk-version','29','--target-sdk-version','35','--version-code','3','--version-name','1.2',"$build\resources.zip")
+Run "$tools\aapt2.exe" @('link','-o',"$build\base.apk",'-I',$androidJar,'--manifest',"$build\AndroidManifest.xml",'--java',"$build\generated",'--min-sdk-version','29','--target-sdk-version','35','--version-code','4','--version-name','1.3',"$build\resources.zip")
 $sources=@(Get-ChildItem "$agentRoot\src","$build\generated" -Recurse -Filter '*.java' | ForEach-Object FullName)
 if(!$Release){$sources+=@(Get-ChildItem "$agentRoot\test" -Recurse -Filter '*.java' | ForEach-Object FullName)}
 Run 'javac' (@('-encoding','UTF-8','--release','8','-classpath',$androidJar,'-d',"$build\classes")+$sources)
@@ -42,3 +42,4 @@ Run "$tools\apksigner.bat" @('verify','--verbose',$apk)
 $checksum=(Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+(Split-Path -Leaf $apk)
 Set-Content -LiteralPath ($apk+'.sha256') -Value $checksum -Encoding utf8
 Write-Output "Built $apk"
+

@@ -9,7 +9,7 @@ test('merchant registration requires approval and preserves tenant isolation',as
  const base='http://127.0.0.1:'+server.address().port;
  const request=async(path,body,token='')=>{const r=await fetch(base+'/api/'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')};};
  try{
-  const fields={role:'merchant',name:'Registered business',email:'merchant@example.com',password:'merchant-test-password-123',status:'active',providers:['bkash'],admin_role:'owner'};
+  const fields={role:'merchant',name:'Registered business',email:'merchant@example.com',password:' merchant-test-password-123 ',status:'active',providers:['bkash'],admin_role:'owner'};
   assert.equal((await request('register',{...fields,password:'short'})).status,422);
   assert.equal((await request('register',fields)).status,201);
   assert.equal((await request('register',fields)).status,409);

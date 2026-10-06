@@ -13,9 +13,9 @@ export default async function handler(req,res){
    'NEON_AUTH_BASE_URL is required on Vercel',
    'NEON_AUTH_BASE_URL requires HTTPS',
    'AUTH_ENCRYPTION_KEY must be a random 32-byte hex key',
-   'APP_ORIGIN requires HTTPS in production'
-   ,'APP_ORIGIN must be a valid absolute URL'
-   ,'NEON_AUTH_BASE_URL must be a valid absolute URL'
+   'APP_ORIGIN requires HTTPS in production',
+   'APP_ORIGIN must be a valid absolute URL',
+   'NEON_AUTH_BASE_URL must be a valid absolute URL'
   ];
   res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});
   const diagnosticCodes=['ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','ERR_UNKNOWN_BUILTIN_MODULE','ERR_INVALID_URL','ERR_WORKER_INIT_FAILED'];
